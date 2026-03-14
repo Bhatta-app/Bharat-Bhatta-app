@@ -1,42 +1,18 @@
-// --- TRANSLATIONS ---
-const i18n = {
-    en: {
-        appName: "Bhatta Manager", loginSubtitle: "Smart Management for Brick Kilns",
-        prodToday: "Production Today", presentWorkers: "Present Workers",
-        dispatchToday: "Dispatch Today", totalExpense: "Total Expense",
-        prodGraph: "Production Graph", quickActions: "Quick Actions",
-        addWorker: "Add Worker", addProd: "Add Prod", attendance: "Attendance",
-        payment: "Payment", workerList: "Worker List", dailyAttendance: "Daily Attendance",
-        saveAttendance: "Save Attendance", recordProduction: "Record Production",
-        stage: "Stage", quantity: "Quantity (Bricks)", damaged: "Damaged",
-        submit: "Submit Record", history: "History", paymentLedger: "Payment Ledger",
-        inventory: "Inventory", addStock: "Add Stock Entry", home: "Home",
-        workers: "Workers", production: "Production", payments: "Payments",
-        save: "Save", cancel: "Cancel", makePayment: "Make Payment", pay: "Pay"
-    },
-    hi: {
-        appName: "भट्टा मैनेजर", loginSubtitle: "ईंट भट्ठे के लिए स्मार्ट प्रबंधन",
-        prodToday: "आज का उत्पादन", presentWorkers: "उपस्थित मजदूर",
-        dispatchToday: "आज की डिसपैच", totalExpense: "कुल खर्च",
-        prodGraph: "उत्पादन ग्राफ", quickActions: "त्वरित कार्य",
-        addWorker: "मजदूर जोड़ें", addProd: "उत्पादन जोड़ें", attendance: "हाजिरी",
-        payment: "भुगतान", workerList: "मजदूर सूची", dailyAttendance: "दैनिक हाजिरी",
-        saveAttendance: "हाजरी सहेजें", recordProduction: "उत्पादन दर्ज करें",
-        stage: "चरण", quantity: "मात्रा (ईंटें)", damaged: "टूटी हुई",
-        submit: "रिकॉर्ड जमा करें", history: "इतिहास", paymentLedger: "भुगतान खाता",
-        inventory: "स्टॉक", addStock: "स्टॉक जोड़ें", home: "होम",
-        workers: "मजदूर", production: "उत्पादन", payments: "भुगतान",
-        save: "सहेजें", cancel: "रद्द करें", makePayment: "भुगतान करें", pay: "भुगतान"
-    }
-};
-
-// --- STATE MANAGEMENT ---
+// ---------- STATE ----------
 let currentUser = null;
-let appData = {};
-let currentLang = 'en';
+let appData = {
+    workers: [],
+    attendance: [],
+    production: [],
+    payments: [],
+    orders: [],
+    inventory: { coal: 5000, diesel: 800, soil: 20 },
+    stockHistory: []
+};
 let prodChartInstance = null;
+let otpSent = false;
 
-// --- INITIALIZATION ---
+// ---------- INIT ----------
 function init() {
     const storedUser = localStorage.getItem('bhatta_current_user');
     if (storedUser) {
@@ -45,7 +21,6 @@ function init() {
         showApp();
     } else {
         document.getElementById('login-screen').classList.remove('hidden');
-        document.getElementById('app-container').classList.add('hidden');
     }
     document.getElementById('current-date').innerText = new Date().toLocaleDateString();
 }
@@ -53,17 +28,22 @@ function init() {
 function loadData() {
     const allData = JSON.parse(localStorage.getItem('bhatta_db') || '{}');
     if (!allData[currentUser.mobile]) {
-        // Initialize empty data for new user
+        const today = new Date().toISOString().split('T')[0];
+        const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
         allData[currentUser.mobile] = {
-            workers: [],
+            workers: [{ id: Date.now() - 100, name: 'Ramesh', village: 'Sonepur', phone: '9876543210', role: 'labor', balance: 2000 }],
             attendance: [],
-            production: [],
+            production: [{ id: Date.now() - 200, date: today, stage: 'jalai', qty: 4500, damaged: 100 }],
             payments: [],
-            inventory: { coal: 0, diesel: 0, soil: 0 }
+            orders: [{ id: Date.now() - 400, customer: 'Ram Traders', qty: 10000, rate: 7500, advance: 5000, status: 'pending', date: today }],
+            inventory: { coal: 5200, diesel: 750, soil: 22 },
+            stockHistory: [{ material: 'coal', change: +200, note: 'purchase', date: yesterday }]
         };
         localStorage.setItem('bhatta_db', JSON.stringify(allData));
     }
     appData = allData[currentUser.mobile];
+    if (!appData.inventory) appData.inventory = { coal: 5000, diesel: 800, soil: 20 };
+    if (!appData.stockHistory) appData.stockHistory = [];
     updateDashboard();
 }
 
@@ -74,28 +54,33 @@ function saveData() {
     updateDashboard();
 }
 
-// --- AUTHENTICATION ---
-let otpSent = false;
+// ---------- AUTH ----------
 function handleLogin() {
-    const mobile = document.getElementById('login-mobile').value;
+    const mobileInput = document.getElementById('login-mobile');
     const otpInput = document.getElementById('login-otp');
     const btn = document.getElementById('btn-login-action');
 
+    let mobile = mobileInput.value.trim();
+    mobile = mobile.replace(/\D/g, '');
+
     if (!otpSent) {
-        if(mobile.length < 10) return alert("Enter valid mobile");
+        if (mobile.length !== 10) {
+            alert("Please enter a valid 10-digit mobile number");
+            return;
+        }
         otpSent = true;
         otpInput.style.display = 'block';
         btn.innerText = "Verify OTP";
-        alert("OTP Sent: 1234 (Demo)");
+        alert("OTP 1234 sent to " + mobile);
     } else {
-        const otp = otpInput.value;
+        const otp = otpInput.value.trim();
         if (otp === "1234") {
-            currentUser = { mobile: mobile, role: 'Owner' };
+            currentUser = { mobile: mobile };
             localStorage.setItem('bhatta_current_user', JSON.stringify(currentUser));
             loadData();
             showApp();
         } else {
-            alert("Invalid OTP");
+            alert("Invalid OTP. Use 1234");
         }
     }
 }
@@ -111,137 +96,152 @@ function showApp() {
     navTo('view-dashboard');
 }
 
-// --- NAVIGATION ---
-function navTo(viewId, navEl = null) {
-    document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
+// ---------- NAVIGATION ----------
+function navTo(viewId, el) {
+    document.querySelectorAll('.view-section').forEach(v => v.classList.add('hidden'));
     document.getElementById(viewId).classList.remove('hidden');
-    
-    // Update Nav UI
-    if(navEl) {
-        document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-        navEl.classList.add('active');
-    }
-
-    // Refresh specific views
-    if(viewId === 'view-workers') renderWorkers();
-    if(viewId === 'view-attendance') renderAttendance();
-    if(viewId === 'view-production') renderProdHistory();
-    if(viewId === 'view-payments') renderPayments();
-    if(viewId === 'view-inventory') renderInventory();
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    if (el) el.classList.add('active');
+    if (viewId === 'view-workers') renderWorkers();
+    if (viewId === 'view-attendance') renderAttendance();
+    if (viewId === 'view-production') renderProdHistory();
+    if (viewId === 'view-payments') renderPayments();
+    if (viewId === 'view-orders') renderOrders();
+    if (viewId === 'view-inventory') renderInventory();
 }
 
-// --- DASHBOARD LOGIC ---
+// ---------- DASHBOARD ----------
 function updateDashboard() {
-    // Calculate Today's Production
     const today = new Date().toISOString().split('T')[0];
     const todayProd = appData.production
         .filter(p => p.date === today)
-        .reduce((sum, p) => sum + (parseInt(p.qty) - parseInt(p.damaged)), 0);
+        .reduce((s, p) => s + (parseInt(p.qty) - parseInt(p.damaged)), 0);
+    document.getElementById('dash-production').innerText = todayProd;
     
-    document.getElementById('dash-production').innerText = todayProd.toLocaleString();
+    const present = appData.attendance
+        .filter(a => a.date === today && a.status === 'present').length;
+    document.getElementById('dash-workers').innerText = present;
+    
+    const dispatchedToday = appData.orders
+        .filter(o => o.date === today && o.status === 'dispatched')
+        .reduce((s, o) => s + parseInt(o.qty), 0);
+    document.getElementById('dash-dispatched').innerText = dispatchedToday;
+    
+    const totalExp = appData.payments
+        .reduce((s, p) => s + parseInt(p.amount), 0);
+    document.getElementById('dash-expense').innerText = '₹' + totalExp;
 
-    // Calculate Present Workers
-    const todayAtt = appData.attendance.filter(a => a.date === today && a.status === 'present');
-    document.getElementById('dash-workers').innerText = todayAtt.length;
-
-    // Total Expense
-    const totalExp = appData.payments.reduce((sum, p) => sum + parseInt(p.amount), 0);
-    document.getElementById('dash-expense').innerText = "₹" + totalExp.toLocaleString();
-
-    // Update Chart
-    updateChart(todayProd);
+    // Credit calculation
+    let credit = 0;
+    appData.orders.filter(o => o.status !== 'dispatched').forEach(o => {
+        const val = (parseInt(o.qty) * parseInt(o.rate)) / 1000;
+        credit += val - (parseInt(o.advance) || 0);
+    });
+    document.getElementById('dash-credit').innerText = '₹' + Math.max(0, credit);
+    
+    // Profit calculation
+    const revenue = appData.orders
+        .filter(o => o.status === 'dispatched')
+        .reduce((s, o) => s + (parseInt(o.qty) * parseInt(o.rate) / 1000), 0);
+    document.getElementById('dash-profit').innerText = '₹' + Math.max(0, revenue - totalExp);
+    
+    // Pending orders count
+    document.getElementById('dash-pending-orders').innerText = 
+        appData.orders.filter(o => o.status !== 'dispatched').length;
+    
+    updateChart();
 }
 
-function updateChart(todayProd) {
+function updateChart() {
     const ctx = document.getElementById('productionChart').getContext('2d');
-    const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    const data = [1000, 1500, 1200, 1700, 1300, 2000, todayProd || 0]; 
-
+    const labels = [], data = [];
+    for (let i = 6; i >= 0; i--) {
+        let d = new Date();
+        d.setDate(d.getDate() - i);
+        let ds = d.toISOString().split('T')[0];
+        labels.push(ds.slice(5));
+        let dayProd = appData.production
+            .filter(p => p.date === ds)
+            .reduce((s, p) => s + (parseInt(p.qty) - parseInt(p.damaged)), 0);
+        data.push(dayProd);
+    }
     if (prodChartInstance) prodChartInstance.destroy();
-
     prodChartInstance = new Chart(ctx, {
         type: 'bar',
         data: {
             labels: labels,
             datasets: [{
-                label: 'Bricks',
+                label: 'Net Bricks',
                 data: data,
-                backgroundColor: '#FF6B00',
-                borderRadius: 4
+                backgroundColor: '#f97316'
             }]
         },
-        options: { responsive: true, plugins: { legend: { display: false } } }
+        options: {
+            plugins: { legend: { display: false } }
+        }
     });
 }
 
-// --- WORKER MODULE ---
+// ---------- WORKER ----------
 function saveWorker() {
-    const name = document.getElementById('w-name').value;
-    const village = document.getElementById('w-village').value;
-    const phone = document.getElementById('w-phone').value;
-    const role = document.getElementById('w-role').value;
-
-    if(!name) return alert("Name required");
-
-    appData.workers.push({ id: Date.now(), name, village, phone, role, balance: 0 });
+    const name = document.getElementById('w-name').value.trim();
+    if (!name) return alert("Name required");
+    appData.workers.push({
+        id: Date.now(),
+        name: name,
+        village: document.getElementById('w-village').value,
+        phone: document.getElementById('w-phone').value,
+        role: document.getElementById('w-role').value,
+        balance: 0
+    });
     saveData();
     hideModal('modal-worker');
     renderWorkers();
-    
-    // Clear inputs
     document.getElementById('w-name').value = '';
-    document.getElementById('w-village').value = '';
-    document.getElementById('w-phone').value = '';
 }
 
 function renderWorkers() {
-    const container = document.getElementById('workers-list-container');
-    container.innerHTML = '';
-    if(appData.workers.length === 0) {
-        container.innerHTML = '<p style="text-align:center; color:#999;">No workers added yet.</p>';
+    const c = document.getElementById('workers-list-container');
+    if (appData.workers.length === 0) {
+        c.innerHTML = '<p>No workers</p>';
         return;
     }
-    appData.workers.forEach(w => {
-        container.innerHTML += `
-            <div class="list-item">
-                <div>
-                    <div style="font-weight:bold;">${w.name}</div>
-                    <div style="font-size:12px; color:#777;">${w.village} | ${w.role}</div>
-                </div>
-                <div style="text-align:right;">
-                    <div style="font-size:12px;">Bal: ₹${w.balance}</div>
-                    <i class="fas fa-edit" style="color:var(--primary); margin-left:10px;"></i>
-                </div>
+    c.innerHTML = appData.workers.map(w => `
+        <div class="list-item">
+            <div>
+                <b>${w.name}</b><br>
+                <small>${w.village} | ${w.role}</small>
             </div>
-        `;
-    });
+            <div>Bal: ₹${w.balance}</div>
+        </div>
+    `).join('');
 }
 
-// --- ATTENDANCE MODULE ---
+// ---------- ATTENDANCE ----------
 function renderAttendance() {
-    const container = document.getElementById('attendance-list-container');
-    container.innerHTML = '';
+    const c = document.getElementById('attendance-list-container');
+    c.innerHTML = '';
     const today = new Date().toISOString().split('T')[0];
     
-    const existing = appData.attendance.find(a => a.date === today);
-    
-    if(existing) {
-        container.innerHTML = '<p style="text-align:center; color:green;">Attendance already marked for today.</p>';
+    if (appData.attendance.some(a => a.date === today)) {
+        c.innerHTML = '<p>Attendance already marked</p>';
         return;
     }
-
-    if(appData.workers.length === 0) {
-        container.innerHTML = '<p style="text-align:center;">Add workers first.</p>';
+    if (!appData.workers.length) {
+        c.innerHTML = '<p>Add workers first</p>';
         return;
     }
-
     appData.workers.forEach(w => {
-        container.innerHTML += `
+        c.innerHTML += `
             <div class="list-item">
                 <span>${w.name}</span>
                 <div>
-                    <label><input type="radio" name="att_${w.id}" value="present" checked> P</label>
-                    <label><input type="radio" name="att_${w.id}" value="absent"> A</label>
+                    <label>
+                        <input type="radio" name="att_${w.id}" value="present" checked> P
+                    </label>
+                    <label style="margin-left:10px;">
+                        <input type="radio" name="att_${w.id}" value="absent"> A
+                    </label>
                 </div>
             </div>
         `;
@@ -251,134 +251,22 @@ function renderAttendance() {
 function saveAttendance() {
     const today = new Date().toISOString().split('T')[0];
     const records = [];
-    
     appData.workers.forEach(w => {
-        const status = document.querySelector(`input[name="att_${w.id}"]:checked`).value;
-        records.push({ workerId: w.id, date: today, status });
+        const sel = document.querySelector(`input[name="att_${w.id}"]:checked`);
+        if (sel) records.push({ workerId: w.id, date: today, status: sel.value });
     });
-
+    if (!records.length) return alert("No data");
+    appData.attendance = appData.attendance.filter(a => a.date !== today);
     appData.attendance.push(...records);
     saveData();
-    alert("Attendance Saved!");
+    alert("Saved");
     renderAttendance();
 }
 
-// --- PRODUCTION MODULE ---
+// ---------- PRODUCTION ----------
 function addProduction() {
     const stage = document.getElementById('prod-stage').value;
-    const qty = document.getElementById('prod-qty').value;
-    const damaged = document.getElementById('prod-damaged').value;
-    const today = new Date().toISOString().split('T')[0];
-
-    if(!qty) return alert("Enter quantity");
-
-    appData.production.push({
-        id: Date.now(), date: today, stage, qty, damaged
-    });
-    saveData();
-    alert("Production Recorded");
-    document.getElementById('prod-qty').value = '';
-    document.getElementById('prod-damaged').value = '0';
-    renderProdHistory();
-}
-
-function renderProdHistory() {
-    const container = document.getElementById('prod-history-container');
-    container.innerHTML = '';
-    const recent = appData.production.slice().reverse().slice(0, 5);
-    recent.forEach(p => {
-        container.innerHTML += `
-            <div class="list-item">
-                <span>${p.stage.toUpperCase()} - ${p.date}</span>
-                <strong>${p.qty} <small style="color:red">(-${p.damaged})</small></strong>
-            </div>
-        `;
-    });
-}
-
-// --- PAYMENT MODULE ---
-function renderPayments() {
-    const container = document.getElementById('payments-list-container');
-    container.innerHTML = '';
-    const recent = appData.payments.slice().reverse().slice(0, 10);
-    
-    if(recent.length === 0) {
-        container.innerHTML = '<p style="text-align:center; color:#999;">No payments yet.</p>';
-        return;
-    }
-
-    recent.forEach(p => {
-        const worker = appData.workers.find(w => w.id == p.workerId);
-        const wName = worker ? worker.name : 'Unknown';
-        container.innerHTML += `
-            <div class="list-item">
-                <div>
-                    <div style="font-weight:bold;">${wName}</div>
-                    <div style="font-size:12px; color:#777;">${p.type} | ${p.date}</div>
-                </div>
-                <div style="color:var(--success); font-weight:bold;">- ₹${p.amount}</div>
-            </div>
-        `;
-    });
-}
-
-function savePayment() {
-    const workerId = document.getElementById('p-worker-select').value;
-    const amount = document.getElementById('p-amount').value;
-    const type = document.getElementById('p-type').value;
-    const today = new Date().toISOString().split('T')[0];
-
-    if(!workerId || !amount) return alert("Fill all fields");
-
-    const workerIndex = appData.workers.findIndex(w => w.id == workerId);
-    if(workerIndex > -1) {
-        appData.workers[workerIndex].balance -= parseInt(amount); 
-    }
-
-    appData.payments.push({
-        id: Date.now(), workerId, amount, type, date: today
-    });
-    saveData();
-    hideModal('modal-payment');
-    renderPayments();
-    document.getElementById('p-amount').value = '';
-}
-
-// --- INVENTORY MODULE ---
-function renderInventory() {
-    document.getElementById('inv-coal').innerText = appData.inventory.coal + " kg";
-    document.getElementById('inv-diesel').innerText = appData.inventory.diesel + " L";
-    document.getElementById('inv-soil').innerText = appData.inventory.soil + " tons";
-}
-
-// --- UTILS ---
-function showModal(id) {
-    document.getElementById(id).classList.remove('hidden');
-    document.getElementById(id).style.display = 'flex';
-    if(id === 'modal-payment') {
-        const select = document.getElementById('p-worker-select');
-        select.innerHTML = '';
-        appData.workers.forEach(w => {
-            select.innerHTML += `<option value="${w.id}">${w.name}</option>`;
-        });
-    }
-}
-function hideModal(id) {
-    document.getElementById(id).classList.add('hidden');
-    document.getElementById(id).style.display = 'none';
-}
-
-function changeLanguage(lang) {
-    currentLang = lang;
-    document.querySelectorAll('[data-i18n]').forEach(el => {
-        const key = el.getAttribute('data-i18n');
-        if(i18n[lang][key]) el.innerText = i18n[lang][key];
-    });
-}
-
-function toggleFabMenu() {
-    alert("Quick Add Menu (Expandable in full version)");
-}
-
-// Start App
-init();
+    const qty = parseInt(document.getElementById('prod-qty').value);
+    const damaged = parseInt(document.getElementById('prod-damaged').value) || 0;
+    if (!qty) return alert("Enter quantity");
+    appData
