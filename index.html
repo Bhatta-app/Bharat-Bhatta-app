@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Bhatta Management App</title>
+    <!-- Chart.js for Analytics -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- Link to CSS -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- LOGIN SCREEN -->
+    <div id="login-screen">
+        <div style="text-align: center;">
+            <i class="fas fa-industry" style="font-size: 50px; margin-bottom: 20px;"></i>
+            <h1 data-i18n="appName">Bhatta Manager</h1>
+            <p data-i18n="loginSubtitle">Smart Management for Brick Kilns</p>
+        </div>
+        <div class="card" style="background: rgba(255,255,255,0.1); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.2);">
+            <div class="input-group">
+                <input type="tel" id="login-mobile" class="login-input" placeholder="Enter Mobile Number">
+            </div>
+            <div class="input-group">
+                <input type="text" id="login-otp" class="login-input" placeholder="Enter OTP (1234)" style="display:none;">
+            </div>
+            <button class="btn btn-primary" id="btn-login-action" onclick="handleLogin()">Get OTP</button>
+        </div>
+        <p style="text-align: center; margin-top: 20px; font-size: 12px;">New users start with empty data automatically.</p>
+    </div>
+
+    <!-- MAIN APP CONTAINER -->
+    <div id="app-container" class="hidden">
+        
+        <!-- Header -->
+        <header>
+            <div class="logo"><i class="fas fa-bricks"></i> BhattaApp</div>
+            <div>
+                <select class="lang-switch" onchange="changeLanguage(this.value)">
+                    <option value="en">English</option>
+                    <option value="hi">Hindi</option>
+                </select>
+                <i class="fas fa-sign-out-alt" style="margin-left: 10px; color: var(--danger);" onclick="logout()"></i>
+            </div>
+        </header>
+
+        <!-- DASHBOARD VIEW -->
+        <div id="view-dashboard" class="view-section">
+            <div class="dashboard-grid">
+                <div class="dash-card">
+                    <i class="fas fa-fire dash-icon color-orange"></i>
+                    <div class="dash-val" id="dash-production">0</div>
+                    <div class="dash-label" data-i18n="prodToday">Production Today</div>
+                </div>
+                <div class="dash-card">
+                    <i class="fas fa-users dash-icon color-blue"></i>
+                    <div class="dash-val" id="dash-workers">0</div>
+                    <div class="dash-label" data-i18n="presentWorkers">Present Workers</div>
+                </div>
+                <div class="dash-card">
+                    <i class="fas fa-truck dash-icon color-purple"></i>
+                    <div class="dash-val" id="dash-dispatch">0</div>
+                    <div class="dash-label" data-i18n="dispatchToday">Dispatch Today</div>
+                </div>
+                <div class="dash-card">
+                    <i class="fas fa-rupee-sign dash-icon color-green"></i>
+                    <div class="dash-val" id="dash-expense">₹0</div>
+                    <div class="dash-label" data-i18n="totalExpense">Total Expense</div>
+                </div>
+            </div>
+
+            <div class="card" style="margin: 0 15px;">
+                <h4 style="margin-bottom: 10px;" data-i18n="prodGraph">Production Graph</h4>
+                <canvas id="productionChart" height="150"></canvas>
+            </div>
+
+            <div class="quick-actions">
+                <h4 style="margin-bottom: 10px;" data-i18n="quickActions">Quick Actions</h4>
+                <div class="qa-grid">
+                    <div class="qa-btn" onclick="navTo('view-workers')"><div class="qa-icon-box"><i class="fas fa-user-plus"></i></div><span data-i18n="addWorker">Add Worker</span></div>
+                    <div class="qa-btn" onclick="navTo('view-production')"><div class="qa-icon-box"><i class="fas fa-plus"></i></div><span data-i18n="addProd">Add Prod</span></div>
+                    <div class="qa-btn" onclick="navTo('view-attendance')"><div class="qa-icon-box"><i class="fas fa-clipboard-check"></i></div><span data-i18n="attendance">Attendance</span></div>
+                    <div class="qa-btn" onclick="navTo('view-payments')"><div class="qa-icon-box"><i class="fas fa-hand-holding-usd"></i></div><span data-i18n="payment">Payment</span></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- WORKERS VIEW -->
+        <div id="view-workers" class="view-section hidden">
+            <div class="section-header">
+                <span class="section-title" data-i18n="workerList">Worker List</span>
+                <button class="btn btn-primary" style="width: auto; padding: 5px 15px;" onclick="showModal('modal-worker')">+ New</button>
+            </div>
+            <div id="workers-list-container" class="card">
+                <!-- Workers injected here -->
+            </div>
+        </div>
+
+        <!-- ATTENDANCE VIEW -->
+        <div id="view-attendance" class="view-section hidden">
+            <div class="section-header">
+                <span class="section-title" data-i18n="dailyAttendance">Daily Attendance</span>
+                <span id="current-date" style="font-size: 12px; color: #777;"></span>
+            </div>
+            <div id="attendance-list-container" class="card">
+                <!-- Attendance List -->
+            </div>
+            <button class="btn btn-primary" style="margin: 15px;" onclick="saveAttendance()" data-i18n="saveAttendance">Save Attendance</button>
+        </div>
+
+        <!-- PRODUCTION VIEW -->
+        <div id="view-production" class="view-section hidden">
+            <div class="section-header">
+                <span class="section-title" data-i18n="recordProduction">Record Production</span>
+            </div>
+            <div class="card">
+                <form onsubmit="event.preventDefault(); addProduction();">
+                    <div class="input-group">
+                        <label data-i18n="stage">Stage</label>
+                        <select id="prod-stage">
+                            <option value="mitti">Mitti (Soil)</option>
+                            <option value="pathai">Pathai (Molding)</option>
+                            <option value="sukhai">Sukhai (Drying)</option>
+                            <option value="jalai">Jalai (Firing)</option>
+                            <option value="nikasi">Nikasi (Unloading)</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <label data-i18n="quantity">Quantity (Bricks)</label>
+                        <input type="number" id="prod-qty" required>
+                    </div>
+                    <div class="input-group">
+                        <label data-i18n="damaged">Damaged</label>
+                        <input type="number" id="prod-damaged" value="0">
+                    </div>
+                    <button type="submit" class="btn btn-primary" data-i18n="submit">Submit Record</button>
+                </form>
+            </div>
+            <h4 style="padding: 0 15px; margin-bottom: 10px;" data-i18n="history">History</h4>
+            <div id="prod-history-container" class="card"></div>
+        </div>
+
+        <!-- PAYMENTS VIEW -->
+        <div id="view-payments" class="view-section hidden">
+            <div class="section-header">
+                <span class="section-title" data-i18n="paymentLedger">Payment Ledger</span>
+                <button class="btn btn-primary" style="width: auto; padding: 5px 15px;" onclick="showModal('modal-payment')">+ Pay</button>
+            </div>
+            <div id="payments-list-container" class="card"></div>
+        </div>
+
+        <!-- INVENTORY VIEW -->
+        <div id="view-inventory" class="view-section hidden">
+            <div class="section-header">
+                <span class="section-title" data-i18n="inventory">Inventory</span>
+            </div>
+            <div class="card">
+                <div class="list-item">
+                    <span>Coal Stock</span>
+                    <strong id="inv-coal">0 kg</strong>
+                </div>
+                <div class="list-item">
+                    <span>Diesel</span>
+                    <strong id="inv-diesel">0 L</strong>
+                </div>
+                <div class="list-item">
+                    <span>Soil</span>
+                    <strong id="inv-soil">0 tons</strong>
+                </div>
+            </div>
+            <button class="btn btn-outline" style="margin: 15px;" onclick="alert('Feature: Add Stock Entry')" data-i18n="addStock">Add Stock Entry</button>
+        </div>
+
+        <!-- FLOATING ACTION BUTTON -->
+        <div class="fab" onclick="toggleFabMenu()">
+            <i class="fas fa-plus"></i>
+        </div>
+
+        <!-- BOTTOM NAV -->
+        <nav class="bottom-nav">
+            <div class="nav-item active" onclick="navTo('view-dashboard', this)">
+                <i class="fas fa-home"></i> <span data-i18n="home">Home</span>
+            </div>
+            <div class="nav-item" onclick="navTo('view-workers', this)">
+                <i class="fas fa-users"></i> <span data-i18n="workers">Workers</span>
+            </div>
+            <div class="nav-item" onclick="navTo('view-production', this)">
+                <i class="fas fa-industry"></i> <span data-i18n="production">Production</span>
+            </div>
+            <div class="nav-item" onclick="navTo('view-payments', this)">
+                <i class="fas fa-wallet"></i> <span data-i18n="payments">Payments</span>
+            </div>
+            <div class="nav-item" onclick="navTo('view-inventory', this)">
+                <i class="fas fa-boxes"></i> <span data-i18n="inventory">Inventory</span>
+            </div>
+        </nav>
+    </div>
+
+    <!-- MODALS -->
+    <!-- Add Worker Modal -->
+    <div id="modal-worker" class="modal hidden">
+        <div class="card modal-content">
+            <h3 data-i18n="addWorker">Add Worker</h3>
+            <div class="input-group"><input type="text" id="w-name" placeholder="Name"></div>
+            <div class="input-group"><input type="text" id="w-village" placeholder="Village"></div>
+            <div class="input-group"><input type="tel" id="w-phone" placeholder="Phone"></div>
+            <div class="input-group">
+                <select id="w-role">
+                    <option value="labor">Labor</option>
+                    <option value="mason">Mason</option>
+                    <option value="driver">Driver</option>
+                </select>
+            </div>
+            <button class="btn btn-primary" onclick="saveWorker()" data-i18n="save">Save</button>
+            <button class="btn btn-outline" onclick="hideModal('modal-worker')" style="margin-top: 10px;" data-i18n="cancel">Cancel</button>
+        </div>
+    </div>
+
+    <!-- Add Payment Modal -->
+    <div id="modal-payment" class="modal hidden">
+        <div class="card modal-content">
+            <h3 data-i18n="makePayment">Make Payment</h3>
+            <div class="input-group">
+                <label>Worker</label>
+                <select id="p-worker-select"></select>
+            </div>
+            <div class="input-group"><input type="number" id="p-amount" placeholder="Amount"></div>
+            <div class="input-group">
+                <select id="p-type">
+                    <option value="wage">Wage Payment</option>
+                    <option value="advance">Advance</option>
+                </select>
+            </div>
+            <button class="btn btn-primary" onclick="savePayment()" data-i18n="pay">Pay</button>
+            <button class="btn btn-outline" onclick="hideModal('modal-payment')" style="margin-top: 10px;" data-i18n="cancel">Cancel</button>
+        </div>
+    </div>
+
+    <!-- Link to JS -->
+    <script src="script.js"></script>
+</body>
+</html>
